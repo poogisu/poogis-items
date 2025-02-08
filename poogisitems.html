@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matching Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(6, 80px);
+            grid-template-rows: repeat(6, 80px);
+            gap: 5px;
+            background: transparent;
+            position: relative;
+        }
+        .tile {
+            width: 80px;
+            height: 80px;
+            background-size: cover;
+            cursor: grab;
+            position: absolute;
+            transition: transform 0.3s ease-in-out;
+        }
+        .tile:active {
+            cursor: grabbing;
+        }
+        .tile.matching {
+            animation: growShrink 0.6s ease-in-out;
+        }
+        @keyframes growShrink {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(0); opacity: 0; }
+        }
+        .tile.new {
+            transform: scale(0);
+            animation: growIntoPlace 0.4s ease-out forwards;
+        }
+        @keyframes growIntoPlace {
+            0% { transform: scale(0); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-board" id="gameBoard"></div>
+
+    <script>
+        const images = [
+            'https://file.garden/Z6UyFsheFD8ZlcGh/3187f9cc657f8220e24e59b4625f839f-removebg-preview.png', // Lamp
+            'https://file.garden/Z6UyFsheFD8ZlcGh/e0bcd4baf0832c714ea4c77fff94437a-removebg-preview.png', // Hat
+            'https://file.garden/Z6UyFsheFD8ZlcGh/image-from-rawpixel-id-16381580-png.png', // Tea
+            'https://file.garden/Z6UyFsheFD8ZlcGh/image-from-rawpixel-id-15601652-png.png', // Flowers
+            'https://file.garden/Z6UyFsheFD8ZlcGh/image-from-rawpixel-id-15203746-png.png'  // Books
+        ];
+
+        const gridSize = 6;
+        const tileSize = 80;
+        const board = document.getElementById('gameBoard');
+        let boardState = [];
+
+        function generateBoard() {
+            board.innerHTML = "";
+            boardState = [];
+
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                const tile = createTile(i);
+                board.appendChild(tile);
+                boardState.push(tile.dataset.image);
+            }
+        }
+
+        function createTile(index) {
+            const tile = document.createElement('div');
+            tile.classList.add('tile');
+            const randomImage = images[Math.floor(Math.random() * images.length)];
+            tile.style.backgroundImage = `url(${randomImage})`;
+            tile.dataset.index = index;
+            tile.dataset.image = randomImage;
+            tile.draggable = true;
+            tile.style.top = `${Math.floor(index / gridSize) * tileSize}px`;
+            tile.style.left = `${(index % gridSize) * tileSize}px`;
+
+            tile.addEventListener('dragstart', handleDragStart);
+            tile.addEventListener('dragover', handleDragOver);
+            tile.addEventListener('drop', handleDrop);
+
+            return tile;
+        }
+
+        let draggedTile = null;
+        let draggedIndex = null;
+
+        function handleDragStart(event) {
+            draggedTile = event.target;
+            draggedIndex = parseInt(draggedTile.dataset.index);
+            event.dataTransfer.setData("text/plain", draggedIndex);
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            const targetTile = event.target;
+            const targetIndex = parseInt(targetTile.dataset.index);
+
+            swapTiles(draggedIndex, targetIndex);
+
+            setTimeout(() => {
+                const matchedTiles = findMatches([draggedIndex, targetIndex]);
+                if (matchedTiles.size > 0) {
+                    removeMatchedTiles(matchedTiles);
+                    setTimeout(fillEmptySpots, 500);
+                } else {
+                    swapTiles(draggedIndex, targetIndex);
+                }
+            }, 300);
+        }
+
+        function swapTiles(index1, index2) {
+            const tempImage = boardState[index1];
+            boardState[index1] = boardState[index2];
+            boardState[index2] = tempImage;
+
+            updateBoard();
+        }
+
+        function updateBoard() {
+            document.querySelectorAll('.tile').forEach(tile => {
+                const index = parseInt(tile.dataset.index);
+                const x = index % gridSize;
+                const y = Math.floor(index / gridSize);
+                tile.style.left = `${x * tileSize}px`;
+                tile.style.top = `${y * tileSize}px`;
+                tile.style.backgroundImage = `url(${boardState[index]})`;
+            });
+        }
+
+        function findMatches(swappedTiles) {
+            let matchedTiles = new Set();
+
+            swappedTiles.forEach(index => {
+                const row = Math.floor(index / gridSize);
+                const col = index % gridSize;
+                const image = boardState[index];
+
+                let horizontalMatches = [index];
+                let verticalMatches = [index];
+
+                // Check horizontal
+                for (let i = col - 1; i >= 0; i--) {
+                    if (boardState[row * gridSize + i] === image) {
+                        horizontalMatches.push(row * gridSize + i);
+                    } else break;
+                }
+                for (let i = col + 1; i < gridSize; i++) {
+                    if (boardState[row * gridSize + i] === image) {
+                        horizontalMatches.push(row * gridSize + i);
+                    } else break;
+                }
+
+                // Check vertical
+                for (let i = row - 1; i >= 0; i--) {
+                    if (boardState[i * gridSize + col] === image) {
+                        verticalMatches.push(i * gridSize + col);
+                    } else break;
+                }
+                for (let i = row + 1; i < gridSize; i++) {
+                    if (boardState[i * gridSize + col] === image) {
+                        verticalMatches.push(i * gridSize + col);
+                    } else break;
+                }
+
+                if (horizontalMatches.length >= 3) horizontalMatches.forEach(i => matchedTiles.add(i));
+                if (verticalMatches.length >= 3) verticalMatches.forEach(i => matchedTiles.add(i));
+            });
+
+            return matchedTiles;
+        }
+
+        function removeMatchedTiles(matchedTiles) {
+            matchedTiles.forEach(i => {
+                const tile = document.querySelector(`.tile[data-index="${i}"]`);
+                tile.classList.add('matching');
+                boardState[i] = null;
+            });
+
+            setTimeout(() => {
+                matchedTiles.forEach(i => {
+                    const tile = document.querySelector(`.tile[data-index="${i}"]`);
+                    if (tile) tile.remove();
+                });
+            }, 500);
+        }
+
+        function fillEmptySpots() {
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                if (boardState[i] === null) {
+                    const newTile = createTile(i);
+                    newTile.classList.add('new');
+                    board.appendChild(newTile);
+                    boardState[i] = newTile.dataset.image;
+                }
+            }
+        }
+
+        generateBoard();
+    </script>
+</body>
+</html>
